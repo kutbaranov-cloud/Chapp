@@ -1,0 +1,34 @@
+version: '3.8'
+
+volumes:
+  postgres_data_messenger:
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres_db_messenger
+    environment:
+      POSTGRES_USER: denis
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: aesty_messenger_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data_messenger:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d postgres" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+  app:
+    build: .
+    container_name: messenger_app
+    depends_on:
+      - postgres
+    ports:
+      - "8084:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/aesty_messenger_db
+      SPRING_DATASOURCE_USERNAME: denis
+      SPRING_DATASOURCE_PASSWORD: postgres
+
