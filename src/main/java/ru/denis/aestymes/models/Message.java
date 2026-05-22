@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 public class Message {
-я
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -66,7 +66,6 @@ public class Message {
     @JoinColumn(name = "reply_to_message_id")
     private Message replyTo;
 
-    // --- ХИРУРГИЧЕСКОЕ ДОПОЛНЕНИЕ ДЛЯ ОТОБРАЖЕНИЯ ЦИТАТ И REPLY (БЕЗ ОШИБОК) ---
     @Column(name = "parent_id")
     private Long parentId;
 
@@ -76,16 +75,12 @@ public class Message {
     @Column(name = "parent_sender_name")
     private String parentSenderName;
 
-    // [ДОБАВЛЕНО] Поле для хранения URL аватарки автора пересланного сообщения
     @Column(name = "parent_sender_avatar")
     private String parentSenderAvatar;
-    // -------------------------------------------------------------------------
 
-    // --- ХИРУРГИЧЕСКОЕ ДОПОЛНЕНИЕ ДЛЯ ЗАКРЕПЛЕНИЯ СООБЩЕНИЙ ---
     @Builder.Default
     @Column(name = "is_pinned")
     private Boolean isPinned = false;
-    // -------------------------------------------------------------------------
 
     @Column(name = "encryption_key")
     private String encryptionKey;
@@ -94,7 +89,6 @@ public class Message {
         return isRead != null && isRead;
     }
 
-    // --- ХИРУРГИЧЕСКИЕ МЕТОДЫ ГЕТТЕРА И СЕТТЕРА ДЛЯ ИСКЛЮЧЕНИЯ ОШИБОК СБОРКИ ---
     public Boolean getIsPinned() {
         return isPinned != null && isPinned;
     }
@@ -102,7 +96,6 @@ public class Message {
     public void setIsPinned(Boolean isPinned) {
         this.isPinned = isPinned;
     }
-    // -------------------------------------------------------------------------
 
     @PrePersist
     protected void onCreate() {
