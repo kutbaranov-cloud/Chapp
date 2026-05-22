@@ -11,8 +11,6 @@
     <groupId>ru.denis</groupId>
     <artifactId>aesty-messenger</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>aesty-messenger</name>
-    <description>aesty-messenger</description>
 
     <properties>
         <java.version>21</java.version>
@@ -66,10 +64,6 @@
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-redis</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-oauth2-client</artifactId>
         </dependency>
         <dependency>
@@ -87,14 +81,6 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
-                <configuration>
-                    <excludes>
-                        <exclude>
-                            <groupId>org.projectlombok</groupId>
-                            <artifactId>lombok</artifactId>
-                        </exclude>
-                    </excludes>
-                </configuration>
             </plugin>
         </plugins>
     </build>
