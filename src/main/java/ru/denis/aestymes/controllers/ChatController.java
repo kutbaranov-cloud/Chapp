@@ -255,20 +255,32 @@ public class ChatController {
 
     @PostMapping("/api/chats/create")
     @ResponseBody
-    public ResponseEntity<?> createChatHttp(@RequestParam String name, Authentication auth) {
+    public ResponseEntity<Map<String, String>> createChatHttp(@RequestParam String name, Authentication auth) {
         try {
-            if (name == null || name.isBlank()) return ResponseEntity.badRequest().body("Invalid data");
-            MyUser currentUser = myUserService.findByUsername("alice_chatT").orElse(null);
-            if (currentUser == null) return ResponseEntity.status(401).build();
+            if (name == null || name.isBlank()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Invalid data"));
+            }
+
+            // ИСПРАВЛЕНИЕ: Берем реального текущего пользователя из сессии, а не хардкод
+            MyUser currentUser = myUserService.findByEmail(auth.getName()).orElse(null);
+            if (currentUser == null) {
+                return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
+            }
+
             MyUser target = myUserService.findByUsername(name).orElse(null);
-            if (target == null) return ResponseEntity.status(404).body("User not found");
+            if (target == null) {
+                return ResponseEntity.status(404).body(Map.of("error", "User not found"));
+            }
+
             chatService.getOrCreatePrivateChat(currentUser.getId(), target.getId());
+
             messagingTemplate.convertAndSend("/topic/user/" + target.getId() + "/queue/new-chat", "REFRESH");
             log.info("HTTP Chat created between {} and {}", currentUser.getUsername(), target.getUsername());
-            return ResponseEntity.ok("Created");
+
+            return ResponseEntity.ok(Map.of("status", "Created"));
         } catch (Exception e) {
             log.error("Error in HTTP chat creation", e);
-            return ResponseEntity.internalServerError().build();
+            return ResponseEntity.internalServerError().body(Map.of("error", "Server error"));
         }
     }
 
