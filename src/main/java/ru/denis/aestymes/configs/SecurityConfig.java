@@ -1,5 +1,6 @@
 package ru.denis.aestymes.configs;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
@@ -9,6 +10,10 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.client.registration.ClientRegistration;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.client.registration.InMemoryClientRegistrationRepository;
+import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.session.jdbc.config.annotation.web.http.EnableJdbcHttpSession;
@@ -26,12 +31,35 @@ public class SecurityConfig {
     private final MyOauthUserService myOauthUserService;
     private final MyUserService myUserService;
 
+    @Value("${spring.security.oauth2.client.registration.google.client-id}")
+    private String googleClientId;
+
+    @Value("${spring.security.oauth2.client.registration.google.client-secret}")
+    private String googleClientSecret;
+
     public SecurityConfig(JwtFilter jwtFilter,
                           MyOauthUserService myOauthUserService,
                           @Lazy MyUserService myUserService) {
         this.jwtFilter = jwtFilter;
         this.myOauthUserService = myOauthUserService;
         this.myUserService = myUserService;
+    }
+
+    @Bean
+    public ClientRegistrationRepository clientRegistrationRepository() {
+        ClientRegistration googleRegistration = ClientRegistration.withRegistrationId("google")
+                .clientId(googleClientId)
+                .clientSecret(googleClientSecret)
+                .scope("profile", "email")
+                .authorizationUri("https://accounts.google.com/o/oauth2/v2/auth")
+                .tokenUri("https://oauth2.googleapis.com/token")
+                .userInfoUri("https://www.googleapis.com/oauth2/v3/userinfo")
+                .userNameAttributeName("sub")
+                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+                .redirectUri("{baseUrl}/login/oauth2/code/{registrationId}")
+                .clientName("Google")
+                .build();
+        return new InMemoryClientRegistrationRepository(googleRegistration);
     }
 
     @Bean
@@ -51,13 +79,9 @@ public class SecurityConfig {
                         .passwordParameter("password")
                         .defaultSuccessUrl("/chats", true)
                         .failureUrl("/login?error")
-                        // ХИРУРГИЧЕСКАЯ ВСТАВКА: Расширенная диагностика
                         .failureHandler((request, response, exception) -> {
                             System.out.println("=== SECURITY DEBUG START ===");
-                            System.out.println("Попытка входа с Email: " + request.getParameter("email"));
                             System.out.println("Тип ошибки: " + exception.getClass().getName());
-                            System.out.println("Сообщение: " + exception.getMessage());
-                            System.out.println("=== SECURITY DEBUG END ===");
                             response.sendRedirect("/login?error");
                         })
                         .permitAll()
@@ -76,9 +100,7 @@ public class SecurityConfig {
                         .logoutUrl("/logout")
                         .addLogoutHandler((request, response, authentication) -> {
                             MyUser user = myUserService.getAuthenticatedUser(request);
-                            if (user != null) {
-                                myUserService.setOffline(user.getId());
-                            }
+                            if (user != null) myUserService.setOffline(user.getId());
                         })
                         .logoutSuccessUrl("/login?logout")
                         .deleteCookies("JWT_TOKEN", "JSESSIONID", "remember-me")
