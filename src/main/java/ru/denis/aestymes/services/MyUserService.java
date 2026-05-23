@@ -32,7 +32,6 @@ import java.util.Arrays;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.*;
-import java.util.concurrent.CompletableFuture;
 
 @Service
 public class MyUserService implements UserDetailsService {
@@ -191,31 +190,17 @@ public class MyUserService implements UserDetailsService {
         myUserRepository.save(user);
     }
 
-    @Transactional
+    // ХИРУРГИЧЕСКОЕ ИСПРАВЛЕНИЕ: Добавлено хеширование пароля перед сохранением
     public void save(MyUser myUser) {
-        // Хешируем пароль, если он еще не хеширован
         if (myUser.getPasswordHash() != null && !myUser.getPasswordHash().startsWith("$2a$")) {
             myUser.setPasswordHash(passwordEncoder.encode(myUser.getPasswordHash()));
         }
-
         myUser.setVerified(false);
         String confirmationToken = UUID.randomUUID().toString();
         myUser.setConfirmationToken(confirmationToken);
-
-        // Сначала сохраняем пользователя в БД
         myUserRepository.save(myUser);
-
-        // Асинхронно пытаемся отправить письмо
-        CompletableFuture.runAsync(() -> {
-            try {
-                emailService.sendConfirmationEmail(myUser.getEmail(), confirmationToken);
-            } catch (Exception e) {
-                System.err.println("Ошибка при отправке письма: " + e.getMessage());
-            }
-        });
+        emailService.sendConfirmationEmail(myUser.getEmail(), confirmationToken);
     }
-
-// Метод getCurrentUserId менять не нужно, он у тебя в порядке.
 
     public Long getCurrentUserId(HttpServletRequest request) {
         if (request.getCookies() == null) return -1L;
