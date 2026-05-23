@@ -234,18 +234,18 @@ public class MyUserService implements UserDetailsService {
         myUserRepository.save(user);
     }
 
-    @jakarta.annotation.PostConstruct
-    public void initTestUser() {
-        try {
-            MyUser user = myUserRepository.findMyUserByEmail("evabuldogova@bk.ru");
-            if (user != null) {
-                user.setPasswordHash(passwordEncoder.encode("12345"));
-                user.setVerified(true);
-                myUserRepository.save(user);
-                System.out.println("=== TEST USER UPDATED SUCCESSFULLY (Email: evabuldogova@bk.ru, Pass: 12345) ===");
-            }
-        } catch (Exception e) {
-            System.out.println("=== TEST USER UPDATE FAILED: " + e.getMessage() + " ===");
-        }
-    }
+//    @jakarta.annotation.PostConstruct
+//    public void initTestUser() {
+//        try {
+//            MyUser user = myUserRepository.findMyUserByEmail("evabuldogova@bk.ru");
+//            if (user != null) {
+//                user.setPasswordHash(passwordEncoder.encode("12345"));
+//                user.setVerified(true);
+//                myUserRepository.save(user);
+//                System.out.println("=== TEST USER UPDATED SUCCESSFULLY (Email: evabuldogova@bk.ru, Pass: 12345) ===");
+//            }
+//        } catch (Exception e) {
+//            System.out.println("=== TEST USER UPDATE FAILED: " + e.getMessage() + " ===");
+//        }
+//    }
 }
