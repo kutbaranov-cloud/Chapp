@@ -192,14 +192,19 @@ public class MyUserService implements UserDetailsService {
 
     // ХИРУРГИЧЕСКОЕ ИСПРАВЛЕНИЕ: Добавлено хеширование пароля перед сохранением
     public void save(MyUser myUser) {
+        // Хешируем пароль, если он еще не захеширован
         if (myUser.getPasswordHash() != null && !myUser.getPasswordHash().startsWith("$2a$")) {
             myUser.setPasswordHash(passwordEncoder.encode(myUser.getPasswordHash()));
         }
-        myUser.setVerified(false);
-        String confirmationToken = UUID.randomUUID().toString();
-        myUser.setConfirmationToken(confirmationToken);
+
+        // --- АВТО-ПОДТВЕРЖДЕНИЕ ---
+        // Ставим true, чтобы пользователь был сразу активен
+        myUser.setVerified(true);
+        myUser.setConfirmationToken(null);
+
         myUserRepository.save(myUser);
-        emailService.sendConfirmationEmail(myUser.getEmail(), confirmationToken);
+
+        // emailService.sendConfirmationEmail(...) убрали, так как теперь он не нужен
     }
 
     public Long getCurrentUserId(HttpServletRequest request) {
