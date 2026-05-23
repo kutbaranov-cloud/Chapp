@@ -490,9 +490,36 @@ public class ChatController {
     }
 
     @PostMapping("/chats/{id}/delete")
-    public String deleteChat(@PathVariable Long id) {
-        try { if (id != null) chatService.deleteChat(id); } catch (Exception e) { log.warn("Chat already gone: {}", id); }
-        return "redirect:/chats";
+    @ResponseBody // Важно: используем ResponseBody, чтобы не было редиректа
+    public ResponseEntity<?> deleteChat(@PathVariable Long id) {
+        try {
+            if (id != null) {
+                Chat chat = chatService.getChatById(id);
+                if (chat != null) {
+                    // Собираем ID участников, чтобы уведомить их
+                    List<Long> memberIds = chat.getMembers().stream()
+                            .map(m -> m.getUser().getId())
+                            .collect(Collectors.toList());
+
+                    // Удаляем чат
+                    chatService.deleteChat(id);
+
+                    // Отправляем уведомление всем участникам
+                    Map<String, Object> resp = new HashMap<>();
+                    resp.put("type", "CHAT_DELETED");
+                    resp.put("chatId", id);
+
+                    for (Long userId : memberIds) {
+                        messagingTemplate.convertAndSend("/topic/user/" + userId + "/queue/new-chat", resp);
+                    }
+                    return ResponseEntity.ok("Deleted");
+                }
+            }
+            return ResponseEntity.notFound().build();
+        } catch (Exception e) {
+            log.warn("Ошибка при удалении чата: {}", id);
+            return ResponseEntity.internalServerError().build();
+        }
     }
 
     @Transactional

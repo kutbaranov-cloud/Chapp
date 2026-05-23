@@ -784,8 +784,22 @@
                     displayGlobalSearchResults(results);
                 });
 
+                // ОБНОВЛЕННАЯ ПОДПИСКА (Убрал дубликат, внедрил CHAT_DELETED)
                 stompClient.subscribe('/topic/user/' + currentUserId + '/queue/new-chat', (res) => {
-                    window.location.reload();
+                    const data = typeof res.body === 'string' ? res.body : JSON.parse(res.body);
+
+                    if (typeof data === 'object' && data.type === 'CHAT_DELETED') {
+                        const chatId = data.chatId;
+                        const chatItem = document.querySelector(`.chat-item[data-chat-id="${chatId}"]`);
+                        if (chatItem) {
+                            chatItem.remove();
+                        }
+                        if (typeof selectedChatId !== 'undefined' && selectedChatId == chatId) {
+                            window.location.href = '/chats';
+                        }
+                    } else {
+                        window.location.reload();
+                    }
                 });
 
                 document.querySelectorAll('.chat-item').forEach(item => {
