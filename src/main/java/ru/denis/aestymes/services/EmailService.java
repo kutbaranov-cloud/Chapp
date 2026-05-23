@@ -12,33 +12,31 @@ public class EmailService {
     @Value("${app.email.url}")
     private String emailUrl;
 
-    @Value("${spring.mail.username}")
-    private String fromEmail;
-
     @Autowired
     private JavaMailSender mailSender;
 
+    // Вспомогательный метод, чтобы достать email отправителя из настроек JavaMailSender
+    private String getFromEmail() {
+        return "bebrsosaevitch@yandex.ru"; // Укажи здесь свой email явно, так как мы зашили его в MailConfig
+    }
+
     public void sendConfirmationEmail(String to, String token) {
         String confirmationLink = emailUrl + "?token=" + token;
-
         SimpleMailMessage message = new SimpleMailMessage();
-
         message.setTo(to);
-        message.setFrom(fromEmail); // Берет kutbaranov@gmail.com
+        message.setFrom(getFromEmail());
         message.setSubject("Aesty messenger register confirmation");
         message.setText("To complete the registration, please click the link below " + confirmationLink);
-
         mailSender.send(message);
     }
 
+    // Сделай то же самое для sendPasswordEmail
     public void sendPasswordEmail(String to, String password) {
         SimpleMailMessage message = new SimpleMailMessage();
-
         message.setTo(to);
-        message.setFrom(fromEmail); // Берет kutbaranov@gmail.com
+        message.setFrom(getFromEmail());
         message.setSubject("Aesty messenger register password");
         message.setText("Your password for aesty messenger: " + password);
-
         mailSender.send(message);
     }
 }
