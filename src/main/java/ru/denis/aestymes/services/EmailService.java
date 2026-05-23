@@ -15,26 +15,22 @@ public class EmailService {
     @Autowired
     private JavaMailSender mailSender;
 
-    // Вспомогательный метод, чтобы достать email отправителя из настроек JavaMailSender
-    private String getFromEmail() {
-        return "bebrsosaevitch@yandex.ru"; // Укажи здесь свой email явно, так как мы зашили его в MailConfig
-    }
+    private final String FROM_EMAIL = "bebrsosaevitch@yandex.ru";
 
     public void sendConfirmationEmail(String to, String token) {
         String confirmationLink = emailUrl + "?token=" + token;
         SimpleMailMessage message = new SimpleMailMessage();
         message.setTo(to);
-        message.setFrom(getFromEmail());
+        message.setFrom(FROM_EMAIL);
         message.setSubject("Aesty messenger register confirmation");
         message.setText("To complete the registration, please click the link below " + confirmationLink);
         mailSender.send(message);
     }
 
-    // Сделай то же самое для sendPasswordEmail
     public void sendPasswordEmail(String to, String password) {
         SimpleMailMessage message = new SimpleMailMessage();
         message.setTo(to);
-        message.setFrom(getFromEmail());
+        message.setFrom(FROM_EMAIL);
         message.setSubject("Aesty messenger register password");
         message.setText("Your password for aesty messenger: " + password);
         mailSender.send(message);
