@@ -31,11 +31,14 @@ public class SecurityConfig {
     private final MyOauthUserService myOauthUserService;
     private final MyUserService myUserService;
 
-    @Value("${spring.security.oauth2.client.registration.google.client-id}")
+    @Value("${GOOGLE_CLIENT_ID}")
     private String googleClientId;
 
-    @Value("${spring.security.oauth2.client.registration.google.client-secret}")
+    @Value("${GOOGLE_CLIENT_SECRET}")
     private String googleClientSecret;
+
+    @Value("${REMEMBER_ME_KEY:aesty_default_secret_key}")
+    private String rememberMeKey;
 
     public SecurityConfig(JwtFilter jwtFilter,
                           MyOauthUserService myOauthUserService,
@@ -56,7 +59,8 @@ public class SecurityConfig {
                 .userInfoUri("https://www.googleapis.com/oauth2/v3/userinfo")
                 .userNameAttributeName("sub")
                 .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
-                .redirectUri("{baseUrl}/login/oauth2/code/{registrationId}")
+                // Жестко заданный URL исключает проблемы с {baseUrl} в облаке
+                .redirectUri("https://aesty-messenger.onrender.com/login/oauth2/code/google")
                 .clientName("Google")
                 .build();
         return new InMemoryClientRegistrationRepository(googleRegistration);
@@ -78,16 +82,10 @@ public class SecurityConfig {
                         .usernameParameter("email")
                         .passwordParameter("password")
                         .defaultSuccessUrl("/chats", true)
-                        .failureUrl("/login?error")
-                        .failureHandler((request, response, exception) -> {
-                            System.out.println("=== SECURITY DEBUG START ===");
-                            System.out.println("Тип ошибки: " + exception.getClass().getName());
-                            response.sendRedirect("/login?error");
-                        })
                         .permitAll()
                 )
                 .rememberMe(remember -> remember
-                        .key("aesty_fixed_secret_key_999")
+                        .key(rememberMeKey)
                         .tokenValiditySeconds(604800)
                         .rememberMeParameter("remember-me")
                 )
