@@ -19,9 +19,10 @@ public interface ChatRepository extends JpaRepository<Chat, Long> {
     @Query("SELECT DISTINCT c FROM Chat c JOIN c.members m WHERE m.user.id = :userId AND c.id IS NOT NULL AND m.isBanned = false ORDER BY c.updatedAt DESC")
     List<Chat> findChatsByUserId(@Param("userId") Long userId);
 
+    // ХИРУРГИЧЕСКАЯ МОДИФИКАЦИЯ: Теперь запрос находит чат независимо от того, кто был передан первым (id1 или id2)
     @Query("SELECT c FROM Chat c JOIN c.members m1 JOIN c.members m2 " +
             "WHERE c.isGroupChat = false " +
-            "AND m1.user.id = :id1 AND m2.user.id = :id2")
+            "AND ((m1.user.id = :id1 AND m2.user.id = :id2) OR (m1.user.id = :id2 AND m2.user.id = :id1))")
     Optional<Chat> findPrivateChatBetweenUsers(@Param("id1") Long id1, @Param("id2") Long id2);
 
     Optional<Chat> findChatById(Long id);
