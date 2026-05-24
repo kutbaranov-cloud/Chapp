@@ -592,6 +592,7 @@ public class ChatController {
             resp.put("chatId", chatId);
             resp.put("userId", currentUser.getId());
             resp.put("userName", displayedName);
+            resp.put("content", displayedName + " покинул(а) группу"); // Передаем готовый текст с правильным именем
             messagingTemplate.convertAndSend("/topic/chat/" + chatId, resp);
 
             chatService.leaveGroupChat(chatId, currentUser.getId());
@@ -686,7 +687,18 @@ public class ChatController {
             resp.put("type", "SYSTEM_NOTICE");
             resp.put("chatId", chatId);
             resp.put("content", noticeText);
+            resp.put("newName", name);
+            resp.put("newAvatar", avatarUrl != null ? avatarUrl : "");
+
+            // 1. Отправляем в топик открытого чата
             messagingTemplate.convertAndSend("/topic/chat/" + chatId, resp);
+
+            // 2. РАССЫЛАЕМ ВСЕМ УЧАСТНИКАМ В ИХ ЛИЧНЫЕ ОЧЕРЕДИ
+            if (chat != null && chat.getMembers() != null) {
+                chat.getMembers().forEach(m ->
+                        messagingTemplate.convertAndSend("/topic/user/" + m.getUser().getId() + "/queue/messages", resp)
+                );
+            }
 
             return ResponseEntity.ok().build();
         } catch (Exception e) {

@@ -423,6 +423,52 @@
                 optionsContainer.style.display = 'none';
             }
         });
+
+        // ==========================================
+        // НОВЫЙ КОД: Перехват сохранения (Реалтайм)
+        // ==========================================
+        const form = document.querySelector('form');
+        const saveBtn = document.getElementById('save-changes');
+
+        if (form && saveBtn) {
+            form.addEventListener('submit', function(e) {
+                e.preventDefault(); // Отменяем стандартную перезагрузку!
+
+                const originalBtnText = saveBtn.innerHTML;
+                saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Сохранение...';
+                saveBtn.disabled = true;
+
+                const formData = new URLSearchParams(new FormData(form));
+
+                fetch(form.action, {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+                })
+                    .then(response => {
+                        if (response.ok) {
+                            saveBtn.innerHTML = '<i class="fas fa-check"></i> Сохранено';
+                            saveBtn.classList.replace('btn-primary', 'btn-success');
+
+                            // Возвращаем кнопку в норму через 2 секунды
+                            setTimeout(() => {
+                                saveBtn.innerHTML = originalBtnText;
+                                saveBtn.classList.replace('btn-success', 'btn-primary');
+                                saveBtn.disabled = false;
+                            }, 2000);
+                        } else {
+                            alert("Ошибка при сохранении профиля");
+                            saveBtn.innerHTML = originalBtnText;
+                            saveBtn.disabled = false;
+                        }
+                    })
+                    .catch(err => {
+                        console.error("Ошибка сети:", err);
+                        saveBtn.innerHTML = originalBtnText;
+                        saveBtn.disabled = false;
+                    });
+            });
+        }
     });
 </script>
 </body>

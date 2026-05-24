@@ -71,13 +71,24 @@
         .modal-content .form-label, .modal-content .modal-title:not(.text-white) { color: #212529 !important; }
         .list-group-item { background-color: #ffffff !important; color: #212529 !important; }
         .modal-backdrop.show { opacity: 0.5 !important; }
-        .system-pin-notice { display: flex !important; width: 100% !important; clear: both !important; align-items: center; text-align: center; margin: 15px 0 !important; color: #5c6b73; font-size: 0.85rem; }
-        .system-pin-notice::before, .system-pin-notice::after { content: ''; flex: 1; border-bottom: 1px solid rgba(0, 123, 255, 0.25); }
-        .system-pin-notice:not(:empty)::before { margin-right: .5em; }
-        .system-pin-notice:not(:empty)::after { margin-left: .5em; }
-        .system-pin-notice span { background: transparent; padding: 0 10px; font-weight: 500; display: inline-flex; align-items: center; gap: 5px; }
-        .system-pin-notice b { font-weight: 600; color: #333; }
         .bi-plus-circle-fill:hover { opacity: 0.7; transform: scale(1.1); }
+
+        /* Хирургическое исправление отступов системных уведомлений */
+        .system-message {
+            margin: 8px auto !important;
+            padding: 6px 14px !important;
+            text-align: center;
+            background-color: rgba(0, 0, 0, 0.05);
+            border-radius: 15px;
+            font-size: 0.82rem;
+            color: #555;
+            width: fit-content;
+            max-width: 85%;
+            clear: both;
+            display: flex;
+            align-items: center;
+            line-height: 1.3;
+        }
     </style>
 </head>
 <body>
@@ -327,31 +338,25 @@
                     <span>Новые сообщения</span>
                 </div>
 
-                <div th:if="${msg.sender == null}"
-                     class="system-wrapper"
-                     style="width: 100% !important; min-width: 100% !important; flex-basis: 100% !important; clear: both !important; display: block !important;">
-                    <div class="system-pin-notice"
-                         th:data-target-id="${msg.parentId != null ? msg.parentId : msg.id}"
-                         style="display: flex !important; justify-content: center !important; width: 100% !important; margin: 15px 0 !important; clear: both !important;"
-                         th:styleappend="${msg.parentId != null} ? 'cursor: pointer;' : ''"
-                         th:onclick="${msg.parentId != null} ? 'scrollToTargetMessage(this.getAttribute(''data-target-id''))' : ''"
-                         th:title="${msg.parentId != null} ? 'Перейти к сообщению' : ''">
-        <span style="background: rgba(0, 0, 0, 0.06); padding: 4px 14px; border-radius: 15px; font-size: 13px; color: #555;">
-            <i th:if="${msg.content != null and #strings.contains(msg.content, 'закрепил')}" class="bi bi-pin-angle-fill text-danger me-1"></i>
-            <i th:if="${msg.content != null and #strings.contains(msg.content, 'открепил')}" class="bi bi-pin-angle text-muted me-1"></i>
-            <i th:if="${msg.content != null and #strings.contains(msg.content, 'покинул')}" class="bi bi-box-arrow-right text-muted me-1"></i>
-
-            <span th:text="${msg.content}">Системное сообщение</span>
-        </span>
-                    </div>
+                <div th:if="${msg.sender == null or (msg.content != null and (#strings.contains(msg.content, 'закрепил сообщение') or #strings.contains(msg.content, 'открепил сообщение') or #strings.contains(msg.content, 'изменил(а) настройки') or #strings.contains(msg.content, 'создал(а) группу') or #strings.contains(msg.content, 'добавил(а)') or #strings.contains(msg.content, 'покинул(а)')))}"
+                     class="system-message"
+                     th:data-target-id="${msg.parentId != null ? msg.parentId : msg.id}"
+                     th:styleappend="${msg.parentId != null} ? 'cursor: pointer;' : ''"
+                     th:onclick="${msg.parentId != null} ? 'scrollToTargetMessage(this.getAttribute(''data-target-id''))' : ''"
+                     th:title="${msg.parentId != null} ? 'Перейти к сообщению' : ''">
+                    <i th:if="${msg.content != null and #strings.contains(msg.content, 'закрепил')}" class="bi bi-pin-angle-fill text-danger me-1"></i>
+                    <i th:if="${msg.content != null and #strings.contains(msg.content, 'открепил')}" class="bi bi-pin-angle text-muted me-1"></i>
+                    <i th:if="${msg.content != null and #strings.contains(msg.content, 'покинул')}" class="bi bi-box-arrow-right text-muted me-1"></i>
+                    <i th:if="${msg.content != null and #strings.contains(msg.content, 'настройки')}" class="bi bi-gear text-muted me-1"></i>
+                    <span th:text="${msg.content}">Системное сообщение</span>
                 </div>
 
-                <div th:unless="${msg.sender == null}"
+                <div th:unless="${msg.sender == null or (msg.content != null and (#strings.contains(msg.content, 'закрепил сообщение') or #strings.contains(msg.content, 'открепил сообщение') or #strings.contains(msg.content, 'изменил(а) настройки') or #strings.contains(msg.content, 'создал(а) группу') or #strings.contains(msg.content, 'добавил(а)') or #strings.contains(msg.content, 'покинул(а)')))}"
                      th:id="'message-' + ${msg.id}"
                      th:class="'d-flex align-items-end mb-3 ' + (${msg.sender?.id == currentUserId} ? 'justify-content-end' : 'justify-content-start')">
 
                     <th:block th:if="${msg.sender?.id != currentUserId}">
-                        <div class="message-avatar-container">
+                        <div class="message-avatar-container" th:attr="data-sender-id=${msg.sender?.id}">
                             <img th:if="${msg.sender?.avatarUrl != null}" th:src="${msg.sender.avatarUrl}"
                                  class="rounded-circle me-2" style="width: 32px; height: 32px; object-fit: cover; border: 1px solid #eee; margin-bottom: 5px;">
                             <div th:unless="${msg.sender?.avatarUrl != null}"
@@ -396,6 +401,7 @@
 
                         <div th:if="${chat != null and chat.isGroupChat != null and chat.isGroupChat and msg.sender?.id != currentUserId}"
                              style="color: var(--tg-primary); font-size: 12px; font-weight: bold; margin-bottom: 2px;"
+                             th:attr="data-sender-name-id=${msg.sender?.id}"
                              th:text="${msg.sender?.name}">
                         </div>
 
@@ -827,6 +833,86 @@
             sendPing();
             stompClient.subscribe('/topic/user-status', (res) => updateUserOnlineUI(JSON.parse(res.body)));
 
+            // ХИРУРГИЧЕСКИ ДОБАВЛЕНО: Слушаем real-time обновления профилей от других пользователей
+            stompClient.subscribe('/topic/global-updates', function (response) {
+                const data = JSON.parse(response.body);
+                if (data.type === 'USER_PROFILE_UPDATE') {
+                    const uId = data.userId;
+                    const newName = data.newName;
+                    const newAvatar = data.newAvatarUrl;
+
+                    if (newAvatar) {
+                        document.querySelectorAll(`.message-avatar-container[data-sender-id="${uId}"]`).forEach(container => {
+                            let img = container.querySelector('img');
+                            if (img) {
+                                img.src = newAvatar;
+                            } else {
+                                let divAvatar = container.querySelector('div.rounded-circle');
+                                if (divAvatar) {
+                                    const newImg = document.createElement('img');
+                                    newImg.src = newAvatar;
+                                    newImg.className = "rounded-circle me-2";
+                                    newImg.style.cssText = "width: 32px; height: 32px; object-fit: cover; border: 1px solid #eee; margin-bottom: 5px;";
+                                    container.replaceChild(newImg, divAvatar);
+                                }
+                            }
+                        });
+                    }
+
+                    if (newName) {
+                        document.querySelectorAll(`div[data-sender-name-id="${uId}"], strong[data-sender-name-id="${uId}"]`).forEach(el => {
+                            el.textContent = newName;
+                        });
+                    }
+
+                    const chatHeader = document.getElementById('chatHeader');
+                    if (chatHeader && chatHeader.querySelector(`[data-user-container-id="${uId}"]`)) {
+                        if (newName) {
+                            const nameEl = chatHeader.querySelector('h6');
+                            if (nameEl) nameEl.textContent = newName;
+                        }
+                        if (newAvatar) {
+                            let img = chatHeader.querySelector('img.avatar') || chatHeader.querySelector('.chat-avatar-container img');
+                            if (img) {
+                                img.src = newAvatar;
+                            } else {
+                                let divAvatar = chatHeader.querySelector('.avatar');
+                                if (divAvatar) {
+                                    const newImg = document.createElement('img');
+                                    newImg.src = newAvatar;
+                                    newImg.className = "avatar me-3";
+                                    divAvatar.parentNode.replaceChild(newImg, divAvatar);
+                                }
+                            }
+                        }
+                    }
+
+                    document.querySelectorAll(`.chat-avatar-container[data-user-id="${uId}"]`).forEach(container => {
+                        const parent = container.closest('.d-flex.w-100');
+                        if (parent) {
+                            if (newName) {
+                                const nameEl = parent.querySelector('.current-receiver-name');
+                                if (nameEl) nameEl.textContent = newName;
+                            }
+                            if (newAvatar) {
+                                let img = container.querySelector('img.chat-avatar');
+                                if (img) {
+                                    img.src = newAvatar;
+                                } else {
+                                    let divAvatar = container.querySelector('.chat-avatar');
+                                    if (divAvatar) {
+                                        const newImg = document.createElement('img');
+                                        newImg.src = newAvatar;
+                                        newImg.className = "chat-avatar";
+                                        divAvatar.parentNode.replaceChild(newImg, divAvatar);
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            });
+
             stompClient.subscribe('/topic/user/' + currentUserId + '/queue/messages', (res) => {
                 const resp = JSON.parse(res.body);
                 if (resp) {
@@ -854,6 +940,39 @@
                     if (resp.type === 'PIN_MESSAGE') {
                         handleLivePinUIUpdate(resp);
                         updatePinIconsInFeed(resp.targetMessageId || resp.messageId || resp.id, resp.isPinned !== undefined ? resp.isPinned : true);
+                    } else if (resp.type === 'SYSTEM_NOTICE') {
+                        // Перехватываем обновление настроек группы из личной очереди
+                        if (resp.newName || resp.newAvatar) {
+                            if (typeof selectedChatId !== 'undefined' && selectedChatId == resp.chatId) {
+                                const headerName = document.querySelector('#chatHeader h6');
+                                const headerAvatar = document.querySelector('#chatHeader img.avatar');
+                                if (headerName && resp.newName) headerName.textContent = resp.newName;
+                                if (headerAvatar && resp.newAvatar) headerAvatar.src = resp.newAvatar;
+                            }
+
+                            const sidebarChat = document.querySelector(`.chat-item[data-chat-id="${resp.chatId}"]`);
+                            if (sidebarChat) {
+                                const sidebarName = sidebarChat.querySelector('.current-receiver-name');
+                                const sidebarAvatarImg = sidebarChat.querySelector('img.chat-avatar');
+                                const sidebarAvatarDiv = sidebarChat.querySelector('.chat-avatar-container .avatar');
+
+                                if (sidebarName && resp.newName) sidebarName.textContent = resp.newName;
+                                if (resp.newAvatar) {
+                                    if (sidebarAvatarImg) {
+                                        sidebarAvatarImg.src = resp.newAvatar;
+                                    } else if (sidebarAvatarDiv) {
+                                        const newImg = document.createElement('img');
+                                        newImg.src = resp.newAvatar;
+                                        newImg.className = 'chat-avatar';
+                                        sidebarAvatarDiv.parentNode.replaceChild(newImg, sidebarAvatarDiv);
+                                    }
+                                }
+                            }
+                        }
+                        if (typeof selectedChatId !== 'undefined' && selectedChatId == resp.chatId) {
+                            appendLiveSystemNotice(resp);
+                        }
+                        updateSidebarPreview(resp.chatId, resp.content, new Date().toISOString(), false, true, false);
                     } else {
                         processIncomingMessage(resp, true);
                     }
@@ -899,6 +1018,39 @@
                             handleLivePinUIUpdate(resp);
                             updatePinIconsInFeed(resp.targetMessageId || resp.messageId || resp.id, resp.type === 'SYSTEM_PIN');
                             appendLiveSystemNotice(resp);
+                        }
+                        // ХИРУРГИЧЕСКОЕ ИСПРАВЛЕНИЕ: Перехват обновления настроек группы
+                        else if (resp.type === 'SYSTEM_NOTICE') {
+                            if (resp.newName || resp.newAvatar) {
+                                // 1. Меняем шапку, если открыт именно этот чат
+                                if (typeof selectedChatId !== 'undefined' && selectedChatId == resp.chatId) {
+                                    const headerName = document.querySelector('#chatHeader h6');
+                                    const headerAvatar = document.querySelector('#chatHeader img.avatar');
+                                    if (headerName && resp.newName) headerName.textContent = resp.newName;
+                                    if (headerAvatar && resp.newAvatar) headerAvatar.src = resp.newAvatar;
+                                }
+                                // 2. Меняем имя и иконку в левом списке (сайдбаре)
+                                const sidebarChat = document.querySelector(`.chat-item[data-chat-id="${resp.chatId}"]`);
+                                if (sidebarChat) {
+                                    const sidebarName = sidebarChat.querySelector('.current-receiver-name');
+                                    const sidebarAvatarImg = sidebarChat.querySelector('img.chat-avatar');
+                                    const sidebarAvatarDiv = sidebarChat.querySelector('.chat-avatar-container .avatar');
+
+                                    if (sidebarName && resp.newName) sidebarName.textContent = resp.newName;
+                                    if (resp.newAvatar) {
+                                        if (sidebarAvatarImg) {
+                                            sidebarAvatarImg.src = resp.newAvatar;
+                                        } else if (sidebarAvatarDiv) {
+                                            const newImg = document.createElement('img');
+                                            newImg.src = resp.newAvatar;
+                                            newImg.className = 'chat-avatar';
+                                            sidebarAvatarDiv.parentNode.replaceChild(newImg, sidebarAvatarDiv);
+                                        }
+                                    }
+                                }
+                            }
+                            appendLiveSystemNotice(resp);
+                            updateSidebarPreview(resp.chatId, resp.content, new Date().toISOString(), false, true, false);
                         }
                         else if (resp.type === 'USER_LEFT' || resp.type === 'USER_ADDED') {
                             const noticeText = resp.content || (resp.type === 'USER_LEFT' ? "Пользователь покинул группу" : "Пользователь добавлен");
@@ -950,6 +1102,8 @@
             if (badge) badge.style.display = isPinned ? 'block' : 'none';
         }
     }
+
+    // ХИРУРГИЧЕСКОЕ ИСПРАВЛЕНИЕ: Мгновенное обновление булавки
     function handleLivePinUIUpdate(resp) {
         if (!resp) return;
 
@@ -1049,7 +1203,8 @@
                 msg.parentId,
                 msg.parentSenderAvatar,
                 msg.senderAvatar,
-                msg.parentSenderName
+                msg.parentSenderName,
+                msg.senderId // ХИРУРГИЧЕСКИ ДОБАВЛЕНО
             );
         });
         container.scrollTop = 0;
@@ -1291,7 +1446,8 @@
                     data.parentId,
                     data.parentSenderAvatar,
                     data.senderAvatar,
-                    data.parentSenderName
+                    data.parentSenderName,
+                    data.senderId // ХИРУРГИЧЕСКИ ДОБАВЛЕНО
                 );
             } catch (err) {
                 console.error("Ошибка внутри функции addMessage:", err);
@@ -1387,7 +1543,7 @@
         }
     };
 
-    function addMessage(content, time, isMy, msgId, isEdited, isRead, parentContent = null, senderName = null, parentId = null, parentSenderAvatar = null, senderAvatar = null, parentSenderName = null) {
+    function addMessage(content, time, isMy, msgId, isEdited, isRead, parentContent = null, senderName = null, parentId = null, parentSenderAvatar = null, senderAvatar = null, parentSenderName = null, senderId = null) {
         const container = document.getElementById('messages');
         if (!container) return;
 
@@ -1411,6 +1567,7 @@
         if (!isMy) {
             const avatarDiv = document.createElement('div');
             avatarDiv.className = "message-avatar-container";
+            if (senderId) avatarDiv.setAttribute('data-sender-id', senderId); // ХИРУРГИЧЕСКИ ДОБАВЛЕНО
             if (senderAvatar) {
                 avatarDiv.innerHTML = `<img src="${senderAvatar}" class="rounded-circle me-2" style="width: 32px; height: 32px; object-fit: cover; border: 1px solid #eee;">`;
             } else {
@@ -1423,7 +1580,7 @@
         div.id = 'msg-' + msgId;
         div.className = `message ${isMy ? 'my-message' : 'other-message'} m-0`;
 
-        let senderNameHtml = (!isMy && senderName) ? `<strong class="d-block mb-1" style="font-size: 13px; color: var(--tg-primary);">${senderName}</strong>` : '';
+        let senderNameHtml = (!isMy && senderName) ? `<strong class="d-block mb-1" style="font-size: 13px; color: var(--tg-primary);" ${senderId ? 'data-sender-name-id="' + senderId + '"' : ''}>${senderName}</strong>` : '';
         let statusHtml = isMy ? `<span class="read-status" style="margin-left: 5px;"><i class="${isRead ? 'bi bi-check2-all' : 'bi bi-check2'}" style="color: ${isRead ? '#4fc3f7' : '#888'};"></i></span>` : '';
 
         let extraHtml = '';
@@ -1444,10 +1601,11 @@
         const displayContent = content.startsWith('FORWARDED:') ? content.replace('FORWARDED:', '') : content;
         const safeContent = displayContent.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
+        // ХИРУРГИЧЕСКОЕ ИСПРАВЛЕНИЕ: Кнопка булавки генерируется с ID и правильной логикой onclick
         div.innerHTML = `
     <div class="msg-actions">
-        <button class="action-btn" title="Закрепить" onclick="pinMessage(${msgId})">
-            <i class="bi bi-pin-angle-fill"></i>
+        <button class="action-btn pin-toggle-btn" id="pin-btn-${msgId}" data-pinned="false" title="Закрепить сообщение" onclick="togglePinMessage(${msgId}, event)">
+            <i class="bi bi-pin-angle"></i>
         </button>
         <button class="action-btn" title="Переслать" data-bs-content="${safeContent}" onclick="window.openForwardModalFromElement(this)">
             <i class="bi bi-share-fill"></i>
@@ -1484,32 +1642,25 @@
 
         const chatList = document.getElementById('contentArea');
 
-        // ХИРУРГИЧЕСКОЕ ВНЕДРЕНИЕ ДЛЯ ПОДНЯТИЯ И ПОДСВЕТКИ НОВОГО ЧАТА НАВЕРХ
-        // --- УМНАЯ СОРТИРОВКА (И ВВЕРХ И ВНИЗ) ---
-        // 1. Обновляем скрытый атрибут времени у чата
         if (time) {
             chatItem.setAttribute('data-time', time);
         } else if (isDeleteAction) {
-            chatItem.setAttribute('data-time', ''); // Если сообщений больше нет, обнуляем время
+            chatItem.setAttribute('data-time', '');
         }
 
         if (chatList) {
-            // 2. Превращаем список чатов в массив и сортируем по времени
             const chatsArr = Array.from(chatList.querySelectorAll('.chat-item'));
             chatsArr.sort((a, b) => {
                 const timeA = a.getAttribute('data-time') ? new Date(a.getAttribute('data-time')).getTime() : 0;
                 const timeB = b.getAttribute('data-time') ? new Date(b.getAttribute('data-time')).getTime() : 0;
-                // Вторичная сортировка по ID (чтобы новые пустые чаты были выше старых пустых)
                 if (timeA === timeB) {
                     return parseInt(b.getAttribute('data-chat-id')) - parseInt(a.getAttribute('data-chat-id'));
                 }
                 return timeB - timeA;
             });
 
-            // 3. Расставляем элементы в новом порядке
             chatsArr.forEach(item => chatList.appendChild(item));
 
-            // 4. Подсветка (только если чат поднялся наверх из-за НОВОГО сообщения)
             if (content && !isDeleteAction && chatItem === chatList.firstElementChild) {
                 chatItem.style.transition = 'background-color 0.5s ease';
                 chatItem.style.backgroundColor = 'rgba(0, 136, 204, 0.15)';
@@ -1520,7 +1671,6 @@
                 }, 800);
             }
         }
-        // --- КОНЕЦ УМНОЙ СОРТИРОВКИ ---
 
         chatItem.dataset.lastSenderMy = isMy;
         const previewContainer = chatItem.querySelector('.sidebar-preview-container');
@@ -2007,6 +2157,8 @@
     document.addEventListener("DOMContentLoaded", () => {
         updatePinnedCounter();
     });
+
+    // ХИРУРГИЧЕСКОЕ ИСПРАВЛЕНИЕ: Универсальный переключатель булавки
     function togglePinMessage(messageId, event) {
         if (event) event.stopPropagation();
 
@@ -2019,6 +2171,7 @@
 
         const isCurrentlyPinned = pinBtn.getAttribute('data-pinned') === 'true';
 
+        // Отправляем на сервер противоположный статус (инвертируем)
         const newPinStatus = !isCurrentlyPinned;
 
         stompClient.send("/app/chat/pin", {}, JSON.stringify({
@@ -2027,6 +2180,7 @@
             isPinned: newPinStatus
         }));
     }
+
     function scrollToTargetMessage(targetId) {
         if (!targetId) return;
 
@@ -2047,23 +2201,22 @@
         }
     }
 
+    // ХИРУРГИЧЕСКОЕ ИСПРАВЛЕНИЕ: Вывод системного уведомления без ломания стилей
     function appendLiveSystemNotice(messageData) {
         const messagesContainer = document.getElementById('messages');
-
         if (messagesContainer) {
-            const wrapper = document.createElement('div');
-            wrapper.className = 'system-wrapper d-flex justify-content-center w-100 my-3';
-            wrapper.style.clear = 'both';
-
             const notice = document.createElement('div');
-            notice.className = 'system-pin-notice text-center';
+            notice.className = 'system-message';
 
             const displayContent = messageData.content || "Системное уведомление";
 
             let iconClass = 'bi-info-circle text-muted';
             if (messageData.type === 'SYSTEM_PIN') iconClass = 'bi-pin-angle-fill text-danger';
             else if (messageData.type === 'SYSTEM_UNPIN') iconClass = 'bi-pin-angle text-muted';
-            else if (messageData.type === 'SYSTEM_NOTICE' && displayContent.includes('покинул')) iconClass = 'bi-box-arrow-right text-muted';
+            else if (displayContent.includes('покинул')) iconClass = 'bi-box-arrow-right text-muted';
+            else if (displayContent.includes('закрепил')) iconClass = 'bi-pin-angle-fill text-danger';
+            else if (displayContent.includes('открепил')) iconClass = 'bi-pin-angle text-muted';
+            else if (displayContent.includes('настройки')) iconClass = 'bi-gear text-muted';
 
             if (messageData.targetMessageId || messageData.messageId || messageData.id) {
                 notice.style.cursor = 'pointer';
@@ -2073,15 +2226,13 @@
                 };
             }
 
-            notice.innerHTML = `<span style="background: rgba(0, 0, 0, 0.06); padding: 4px 14px; border-radius: 15px; font-size: 13px; color: #555; display: inline-block;">
-            <i class="bi ${iconClass} me-1"></i> ${displayContent}
-        </span>`;
+            notice.innerHTML = `<i class="bi ${iconClass} me-1"></i> <span>${displayContent}</span>`;
 
-            wrapper.appendChild(notice);
-            messagesContainer.appendChild(wrapper);
+            messagesContainer.appendChild(notice);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
     }
+
     function leaveGroupChat() {
         const chatId = [[${chat != null ? chat.id : -1}]];
         if (chatId === -1) return;
@@ -2191,7 +2342,7 @@
             .catch(error => console.error("Ошибка запроса:", error));
     }
 
-    // Сохранение изменений группы без файлов
+    // ХИРУРГИЧЕСКОЕ ИСПРАВЛЕНИЕ: Отправка формы без перезагрузки
     function saveGroupSettings() {
         const chatId = [[${chat != null ? chat.id : -1}]];
         if (chatId === -1) return;
@@ -2224,7 +2375,7 @@
                 if (response.ok) {
                     const modal = bootstrap.Modal.getInstance(document.getElementById('groupSettingsModal'));
                     if (modal) modal.hide();
-                    window.location.reload();
+                    // window.location.reload(); <- УДАЛЕНО. UI обновляется сам через WebSocket
                 } else {
                     const errorText = await response.text();
                     alert("Ошибка при сохранении: " + errorText);
@@ -2232,7 +2383,6 @@
             })
             .catch(error => console.error("Ошибка сети:", error));
     }
-
 </script>
 </body>
 </html>

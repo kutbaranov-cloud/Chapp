@@ -3,6 +3,7 @@ package ru.denis.aestymes.services;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.extern.slf4j.Slf4j; // Добавлено для логов
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.context.event.EventListener;
@@ -18,6 +19,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile; // Добавлено для файлов
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 import ru.denis.aestymes.dtos.ChangePasswordDto;
 import ru.denis.aestymes.dtos.UserDTO;
@@ -25,6 +27,11 @@ import ru.denis.aestymes.jwts.JwtProvider;
 import ru.denis.aestymes.models.MyUser;
 import ru.denis.aestymes.repositories.MyUserRepository;
 
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -33,6 +40,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.*;
 
+@Slf4j // Включает log.error и другие методы логгирования
 @Service
 public class MyUserService implements UserDetailsService {
 
@@ -190,21 +198,15 @@ public class MyUserService implements UserDetailsService {
         myUserRepository.save(user);
     }
 
-    // ХИРУРГИЧЕСКОЕ ИСПРАВЛЕНИЕ: Добавлено хеширование пароля перед сохранением
     public void save(MyUser myUser) {
-        // Хешируем пароль, если он еще не захеширован
         if (myUser.getPasswordHash() != null && !myUser.getPasswordHash().startsWith("$2a$")) {
             myUser.setPasswordHash(passwordEncoder.encode(myUser.getPasswordHash()));
         }
-
-        // --- АВТО-ПОДТВЕРЖДЕНИЕ ---
-        // Ставим true, чтобы пользователь был сразу активен
-        myUser.setVerified(true);
-        myUser.setConfirmationToken(null);
-
+        myUser.setVerified(false);
+        String confirmationToken = UUID.randomUUID().toString();
+        myUser.setConfirmationToken(confirmationToken);
         myUserRepository.save(myUser);
-
-        // emailService.sendConfirmationEmail(...) убрали, так как теперь он не нужен
+        emailService.sendConfirmationEmail(myUser.getEmail(), confirmationToken);
     }
 
     public Long getCurrentUserId(HttpServletRequest request) {
@@ -221,22 +223,57 @@ public class MyUserService implements UserDetailsService {
                 }).orElse(-1L);
     }
 
-    public void updateProfile(Long user_id, UserDTO dto) {
-        MyUser user = myUserRepository.getMyUserById(user_id);
-        if(user != null) {
-            user.setName(dto.getName());
-            user.setUsername(dto.getUsername());
-            user.setAvatarUrl(dto.getAvatarUrl());
-            myUserRepository.save(user);
-        }
-    }
-
     public void changePassword(ChangePasswordDto passwordDto, MyUser user) {
         if(!passwordEncoder.matches(passwordDto.getOldPassword(), user.getPasswordHash())) {
             throw new BadCredentialsException("Wrong old password");
         }
         user.setPasswordHash(passwordEncoder.encode(passwordDto.getNewPassword()));
         myUserRepository.save(user);
+    }
+
+    // ИСПРАВЛЕННЫЙ МЕТОД ОБНОВЛЕНИЯ ПРОФИЛЯ
+    // ИСПРАВЛЕННЫЙ МЕТОД ОБНОВЛЕНИЯ ПРОФИЛЯ
+    @Transactional
+    public void updateProfile(Long user_id, UserDTO dto, MultipartFile file) {
+        MyUser user = myUserRepository.getMyUserById(user_id);
+        if(user != null) {
+            // 1. Обновляем текстовые данные
+            user.setName(dto.getName());
+            user.setUsername(dto.getUsername());
+
+            // 2. Если пришел файл - сохраняем его на диск
+            if (file != null && !file.isEmpty()) {
+                try {
+                    String uploadDir = "uploads/";
+                    File dir = new File(uploadDir);
+                    if (!dir.exists()) dir.mkdirs();
+
+                    String fileName = "user_avatar_" + user.getId() + "_" + System.currentTimeMillis() + "_" + file.getOriginalFilename();
+                    Path path = Paths.get(uploadDir + fileName);
+                    Files.copy(file.getInputStream(), path, StandardCopyOption.REPLACE_EXISTING);
+
+                    user.setAvatarUrl("/uploads/" + fileName);
+                } catch (Exception e) {
+                    log.error("Ошибка при сохранении аватара", e);
+                }
+            }
+            // 3. ИНАЧЕ, если файла нет, но пришла текстовая ссылка из DTO (например, готовые аватары DiceBear) - сохраняем её!
+            // 3. ИНАЧЕ, если файла нет, но пришла текстовая ссылка из DTO (например, готовые аватары DiceBear) - сохраняем её!
+            else if (dto.getAvatarUrl() != null && !dto.getAvatarUrl().isEmpty()) {
+                user.setAvatarUrl(dto.getAvatarUrl());
+            }
+
+            myUserRepository.save(user);
+
+            // РАССЫЛАЕМ ОБНОВЛЕНИЕ ПРОФИЛЯ ВСЕМ ОНЛАЙН-ПОЛЬЗОВАТЕЛЯМ
+            java.util.Map<String, Object> updatePayload = new java.util.HashMap<>();
+            updatePayload.put("type", "USER_PROFILE_UPDATE");
+            updatePayload.put("userId", user.getId());
+            updatePayload.put("newName", user.getName());
+            updatePayload.put("newAvatar", user.getAvatarUrl());
+
+            messagingTemplate.convertAndSend("/topic/user-status", updatePayload);
+        }
     }
 
 //    @jakarta.annotation.PostConstruct
