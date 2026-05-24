@@ -10,11 +10,16 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.view.RedirectView;
 import ru.denis.aestymes.dtos.ChangePasswordDto;
 import ru.denis.aestymes.dtos.UserDTO;
 import ru.denis.aestymes.models.MyUser;
 import ru.denis.aestymes.services.MyUserService;
+import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.web.bind.annotation.ResponseBody;
 
 import java.time.LocalDateTime;
 
@@ -24,6 +29,9 @@ public class ProfileController {
 
     @Autowired
     private MyUserService myUserService;
+
+    @Autowired
+    private SimpMessagingTemplate messagingTemplate; // ХИРУРГИЧЕСКИ ДОБАВЛЕНО: Шаблон для real-time уведомлений
 
     @GetMapping("/edit")
     public String editProfilePage(Model model, HttpServletRequest request) {
@@ -51,21 +59,36 @@ public class ProfileController {
     }
 
     @PostMapping("/edit/save")
-    public String saveProfile(@ModelAttribute("userDTO") UserDTO userDTO, BindingResult result, HttpServletRequest request) {
-        if(result.hasErrors()) {
-            return "profile/edit";
-        }
-
+    @ResponseBody // Добавляем аннотацию, чтобы возвращать JSON
+    public ResponseEntity<?> saveProfile(@ModelAttribute("userDTO") UserDTO userDTO,
+                                         @RequestParam(value = "file", required = false) MultipartFile file,
+                                         HttpServletRequest request) {
         MyUser currentUser = myUserService.getAuthenticatedUser(request);
-        if (currentUser == null) return "redirect:/login";
+        if (currentUser == null) {
+            return ResponseEntity.status(401).body("Не авторизован");
+        }
 
         try {
-            myUserService.updateProfile(currentUser.getId(), userDTO);
+            myUserService.updateProfile(currentUser.getId(), userDTO, file);
+
+            // ХИРУРГИЧЕСКИ ДОБАВЛЕНО: Получаем объект из БД с уже сгенерированным новым URL аватарки
+            MyUser updatedUser = myUserService.getUserById(currentUser.getId());
+
+            // Формируем payload для отправки в WebSocket топик всем клиентам
+            java.util.Map<String, Object> updateData = new java.util.HashMap<>();
+            updateData.put("type", "USER_PROFILE_UPDATE");
+            updateData.put("userId", updatedUser.getId());
+            updateData.put("newName", updatedUser.getName());
+            updateData.put("newAvatarUrl", updatedUser.getAvatarUrl());
+
+            // Публикуем событие обновления профиля в глобальный топик
+            messagingTemplate.convertAndSend("/topic/global-updates", updateData);
+
+            return ResponseEntity.ok(java.util.Map.of("status", "success"));
         } catch (Exception e) {
             e.printStackTrace();
+            return ResponseEntity.internalServerError().body("Ошибка при сохранении профиля");
         }
-
-        return "redirect:/chats";
     }
 
     @GetMapping("/password/edit")
