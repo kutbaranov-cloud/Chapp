@@ -48,22 +48,20 @@ public class ChatService {
                     return chat;
                 })
                 .filter(java.util.Objects::nonNull)
-                // ХИРУРГИЧЕСКОЕ ВНЕДРЕНИЕ: Сортировка чатов по времени последнего сообщения
                 .sorted((c1, c2) -> {
                     java.time.LocalDateTime t1 = c1.getLastMessage() != null ? c1.getLastMessage().getCreatedAt() : null;
                     java.time.LocalDateTime t2 = c2.getLastMessage() != null ? c2.getLastMessage().getCreatedAt() : null;
 
                     if (t1 != null && t2 != null) {
-                        return t2.compareTo(t1); // У обоих есть сообщения, сортируем по времени
+                        return t2.compareTo(t1);
                     } else if (t1 != null) {
-                        return -1; // У с1 есть сообщения, он выше
+                        return -1;
                     } else if (t2 != null) {
-                        return 1; // У с2 есть сообщения, он выше
+                        return 1;
                     } else {
-                        return Long.compare(c2.getId(), c1.getId()); // Пустые чаты сортируем по ID (новые выше)
+                        return Long.compare(c2.getId(), c1.getId());
                     }
                 })
-                // КОНЕЦ ВНЕДРЕНИЯ
                 .collect(Collectors.toList());
     }
 
@@ -175,34 +173,20 @@ public class ChatService {
         );
     }
 
+    // ИЗМЕНЕНИЯ: Вместо MultipartFile принимаем только ссылку на аватар
     @Transactional
-    public void updateGroupSettings(Long chatId, String newName, org.springframework.web.multipart.MultipartFile avatarFile) {
+    public void updateGroupSettings(Long chatId, String newName, String avatarUrl) {
         Chat chat = chatRepository.findById(chatId)
                 .orElseThrow(() -> new RuntimeException("Группа не найдена"));
 
         chat.setName(newName);
 
-        if (avatarFile != null && !avatarFile.isEmpty()) {
-            try {
-                String uploadDir = "uploads/";
-                java.io.File dir = new java.io.File(uploadDir);
-                if (!dir.exists()) dir.mkdirs();
-
-                String fileName = "avatar_chat_" + chatId + "_" + System.currentTimeMillis() + "_" + avatarFile.getOriginalFilename();
-                java.nio.file.Path filePath = java.nio.file.Paths.get(uploadDir + fileName);
-
-                java.nio.file.Files.copy(avatarFile.getInputStream(), filePath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-
-                chat.setAvatarUrl("/uploads/" + fileName);
-            } catch (Exception e) {
-                log.error("Ошибка сохранения файла: ", e);
-                throw new RuntimeException("Ошибка сохранения файла");
-            }
+        if (avatarUrl != null && !avatarUrl.isEmpty()) {
+            chat.setAvatarUrl(avatarUrl);
         }
 
         chatRepository.save(chat);
     }
-
 
     @Transactional
     public Chat createGroupChat(String groupName, List<Long> memberIds, Long creatorId) {
@@ -228,15 +212,12 @@ public class ChatService {
             }
         }
 
-
-        // --- ДОБАВЛЕНО: Системное сообщение о создании группы ---
         ru.denis.aestymes.models.Message systemMsg = new ru.denis.aestymes.models.Message();
         systemMsg.setChat(savedChat);
-        systemMsg.setSender(null); // null означает, что это системное (серое) сообщение
+        systemMsg.setSender(null);
         systemMsg.setContent(creator.getName() + " создал(а) группу");
         systemMsg.setCreatedAt(java.time.LocalDateTime.now());
         messageRepository.save(systemMsg);
-        // --------------------------------------------------------
 
         return savedChat;
     }

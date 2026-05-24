@@ -230,6 +230,14 @@
             cursor: pointer;
             font-weight: 500;
             margin: 0 5px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            border: 1px solid var(--tg-primary);
+            transition: all 0.2s;
+        }
+        .avatar-change-btn:hover {
+            background-color: var(--tg-primary);
+            color: white;
         }
 
         .avatar-options {
@@ -340,7 +348,7 @@
             <h5 class="edit-profile-title">Edit Profile</h5>
         </div>
 
-        <form class="profile-form" th:method="post" th:action="@{/profile/edit/save}" th:object="${userDTO}" enctype="multipart/form-data">
+        <form class="profile-form" th:method="post" th:action="@{/profile/edit/save}" th:object="${userDTO}">
             <div class="avatar-upload">
                 <div class="avatar-preview">
                     <img id="avatar-preview-img" th:src="${userDTO.avatarUrl != null ? userDTO.avatarUrl : 'https://api.dicebear.com/7.x/avataaars/svg?seed=John'}" alt="Avatar">
@@ -348,11 +356,8 @@
 
                 <input type="hidden" id="avatarUrl" name="avatarUrl" th:field="*{avatarUrl}" />
 
-                <input type="file" id="fileInput" name="file" accept="image/*" style="display: none;">
-
                 <div class="d-flex justify-content-center">
-                    <button type="button" class="avatar-change-btn" id="avatar-change-btn">Выбрать готовый</button>
-                    <button type="button" class="avatar-change-btn" onclick="document.getElementById('fileInput').click()">Загрузить свой</button>
+                    <button type="button" class="avatar-change-btn" id="avatar-change-btn">Выбрать аватарку</button>
                 </div>
 
                 <div class="avatar-options" id="avatar-options" style="display: none;">
@@ -396,7 +401,6 @@
         const previewImg = document.getElementById('avatar-preview-img');
         const avatarUrlInput = document.getElementById('avatarUrl');
         const avatarOptions = document.querySelectorAll('.avatar-option');
-        const fileInput = document.getElementById('fileInput');
 
         // Показывать/скрывать опции готовых аватаров
         changeBtn.addEventListener('click', function() {
@@ -411,19 +415,6 @@
                 avatarUrlInput.value = selectedUrl; // Сохраняем ссылку
                 optionsContainer.style.display = 'none';
             });
-        });
-
-        // Обработка загрузки файла
-        fileInput.addEventListener('change', function() {
-            const file = this.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    previewImg.src = e.target.result; // Показываем превью
-                }
-                reader.readAsDataURL(file);
-                avatarUrlInput.value = ""; // Очищаем URL, чтобы сервер предпочел файл
-            }
         });
 
         // Закрывать опции при клике вне области
