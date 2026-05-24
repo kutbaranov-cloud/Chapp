@@ -5,9 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Edit Profile - Telegram</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
-    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
@@ -231,6 +229,7 @@
             border: none;
             cursor: pointer;
             font-weight: 500;
+            margin: 0 5px;
         }
 
         .avatar-options {
@@ -333,7 +332,6 @@
 <body>
 <div class="telegram-container">
 
-    <!-- Edit Profile Container -->
     <div class="edit-profile-container active">
         <div class="edit-profile-header">
             <a th:href="@{/chats}" class="back-button">
@@ -342,17 +340,20 @@
             <h5 class="edit-profile-title">Edit Profile</h5>
         </div>
 
-        <form class="profile-form" th:method="post" th:action="@{/profile/edit/save}" th:object="${userDTO}">
+        <form class="profile-form" th:method="post" th:action="@{/profile/edit/save}" th:object="${userDTO}" enctype="multipart/form-data">
             <div class="avatar-upload">
                 <div class="avatar-preview">
-                    <!-- Используем th:src для текущего аватара -->
-                    <img id="avatar-preview-img" th:src="'https://api.dicebear.com/7.x/avataaars/svg?seed=John'" alt="Avatar">
+                    <img id="avatar-preview-img" th:src="${userDTO.avatarUrl != null ? userDTO.avatarUrl : 'https://api.dicebear.com/7.x/avataaars/svg?seed=John'}" alt="Avatar">
                 </div>
 
-                <!-- Скрытое поле для отправки выбранного аватара -->
                 <input type="hidden" id="avatarUrl" name="avatarUrl" th:field="*{avatarUrl}" />
 
-                <button type="button" class="avatar-change-btn" id="avatar-change-btn">Change Avatar</button>
+                <input type="file" id="fileInput" name="file" accept="image/*" style="display: none;">
+
+                <div class="d-flex justify-content-center">
+                    <button type="button" class="avatar-change-btn" id="avatar-change-btn">Выбрать готовый</button>
+                    <button type="button" class="avatar-change-btn" onclick="document.getElementById('fileInput').click()">Загрузить свой</button>
+                </div>
 
                 <div class="avatar-options" id="avatar-options" style="display: none;">
                     <img class="avatar-option" src="https://api.dicebear.com/7.x/avataaars/svg?seed=John" data-seed="John">
@@ -370,7 +371,7 @@
 
             <div class="form-group">
                 <label for="name" class="form-label">Name</label>
-                <input type="text" class="form-control" id="name" th:field="*{name}" th:value="${userDTO.getName()}">
+                <input type="text" class="form-control" id="name" th:field="*{name}">
                 <small class="form-text">Your name as it will appear to other Telegram users.</small>
             </div>
 
@@ -378,16 +379,10 @@
                 <label for="username" class="form-label">Username</label>
                 <div class="input-group">
                     <span class="input-group-text">@</span>
-                    <input type="text" class="form-control" id="username" th:field="*{username}" th:value="${userDTO.getUsername()}">
+                    <input type="text" class="form-control" id="username" th:field="*{username}">
                 </div>
                 <small class="form-text">You can choose a username on Telegram. If you do, people will be able to find you by this username and contact you without needing your phone number.</small>
             </div>
-
-<!--            <div class="form-group">-->
-<!--                <label for="bio" class="form-label">Bio</label>-->
-<!--                <textarea class="form-control" id="bio" rows="3">Hello! I'm using Telegram.</textarea>-->
-<!--                <small class="form-text">A short bio about yourself.</small>-->
-<!--            </div>-->
 
             <button type="submit" class="btn btn-primary" id="save-changes">Save Changes</button>
         </form>
@@ -401,45 +396,42 @@
         const previewImg = document.getElementById('avatar-preview-img');
         const avatarUrlInput = document.getElementById('avatarUrl');
         const avatarOptions = document.querySelectorAll('.avatar-option');
+        const fileInput = document.getElementById('fileInput');
 
-        // Показывать/скрывать опции аватаров
+        // Показывать/скрывать опции готовых аватаров
         changeBtn.addEventListener('click', function() {
-            if (optionsContainer.style.display === 'none') {
-                optionsContainer.style.display = 'grid';
-            } else {
-                optionsContainer.style.display = 'none';
-            }
+            optionsContainer.style.display = (optionsContainer.style.display === 'none') ? 'grid' : 'none';
         });
 
-        // Обработка выбора аватара
+        // Обработка выбора готового аватара
         avatarOptions.forEach(option => {
             option.addEventListener('click', function() {
                 const selectedUrl = this.src;
-                const seed = this.getAttribute('data-seed');
-
-                // Обновляем превью
                 previewImg.src = selectedUrl;
-
-                // Устанавливаем значение в скрытое поле
-                avatarUrlInput.value = selectedUrl;
-
-                // Скрываем опции
+                avatarUrlInput.value = selectedUrl; // Сохраняем ссылку
                 optionsContainer.style.display = 'none';
-
-                console.log('Selected avatar:', selectedUrl);
             });
+        });
+
+        // Обработка загрузки файла
+        fileInput.addEventListener('change', function() {
+            const file = this.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    previewImg.src = e.target.result; // Показываем превью
+                }
+                reader.readAsDataURL(file);
+                avatarUrlInput.value = ""; // Очищаем URL, чтобы сервер предпочел файл
+            }
         });
 
         // Закрывать опции при клике вне области
         document.addEventListener('click', function(e) {
-            if (!optionsContainer.contains(e.target) &&
-                e.target !== changeBtn &&
-                !changeBtn.contains(e.target)) {
+            if (!optionsContainer.contains(e.target) && e.target !== changeBtn && !changeBtn.contains(e.target)) {
                 optionsContainer.style.display = 'none';
             }
         });
-
-
     });
 </script>
 </body>

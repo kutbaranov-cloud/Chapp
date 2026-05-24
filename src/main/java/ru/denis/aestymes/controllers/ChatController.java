@@ -255,32 +255,34 @@ public class ChatController {
 
     @PostMapping("/api/chats/create")
     @ResponseBody
-    public ResponseEntity<Map<String, String>> createChatHttp(@RequestParam String name, Authentication auth) {
+    public ResponseEntity<?> createChatHttp(@RequestParam String name, Authentication auth) {
         try {
-            if (name == null || name.isBlank()) {
-                return ResponseEntity.badRequest().body(Map.of("error", "Invalid data"));
-            }
+            if (name == null || name.isBlank()) return ResponseEntity.badRequest().body("Invalid data");
 
-            // ИСПРАВЛЕНИЕ: Берем реального текущего пользователя из сессии, а не хардкод
+            // Внедрение: Берем реального пользователя из сессии
+            if (auth == null) return ResponseEntity.status(401).build();
             MyUser currentUser = myUserService.findByEmail(auth.getName()).orElse(null);
-            if (currentUser == null) {
-                return ResponseEntity.status(401).body(Map.of("error", "Unauthorized"));
-            }
+            if (currentUser == null) return ResponseEntity.status(401).build();
 
             MyUser target = myUserService.findByUsername(name).orElse(null);
-            if (target == null) {
-                return ResponseEntity.status(404).body(Map.of("error", "User not found"));
+            if (target == null) return ResponseEntity.status(404).body("User not found");
+
+            // Если вы используете id, убедитесь, что они не совпадают
+            if (currentUser.getId().equals(target.getId())) {
+                return ResponseEntity.badRequest().body("Cannot chat with yourself");
             }
 
             chatService.getOrCreatePrivateChat(currentUser.getId(), target.getId());
 
+            // Уведомляем обоих
             messagingTemplate.convertAndSend("/topic/user/" + target.getId() + "/queue/new-chat", "REFRESH");
-            log.info("HTTP Chat created between {} and {}", currentUser.getUsername(), target.getUsername());
+            messagingTemplate.convertAndSend("/topic/user/" + currentUser.getId() + "/queue/new-chat", "REFRESH");
 
-            return ResponseEntity.ok(Map.of("status", "Created"));
+            log.info("HTTP Chat created between {} and {}", currentUser.getUsername(), target.getUsername());
+            return ResponseEntity.ok("Created");
         } catch (Exception e) {
             log.error("Error in HTTP chat creation", e);
-            return ResponseEntity.internalServerError().body(Map.of("error", "Server error"));
+            return ResponseEntity.internalServerError().body("Error: " + e.getMessage());
         }
     }
 
@@ -395,6 +397,16 @@ public class ChatController {
             Chat chat = chatService.getChatById(chatId);
             if (chat == null) return "redirect:/chats";
 
+            // --- ДОБАВИТЬ ЭТОТ БЛОК ---
+            // Проверяем, состоит ли юзер в этом чате. Если он вышел, его тут быть не должно.
+            boolean isMember = chat.getMembers().stream()
+                    .anyMatch(member -> member.getUser().getId().equals(currentUser.getId()));
+            if (!isMember) {
+                log.warn("Попытка доступа к чату {}, в котором юзер {} не состоит", chatId, currentUser.getUsername());
+                return "redirect:/chats";
+            }
+            // ---------------------------
+
             prepareChatModel(model, currentUser);
 
             if (chat.getIsGroupChat() != null && chat.getIsGroupChat()) {
@@ -421,7 +433,8 @@ public class ChatController {
             model.addAttribute("pinnedMessage", pinnedMessage);
 
             Long firstUnreadId = messages.stream()
-                    .filter(m -> !m.getSender().getId().equals(currentUser.getId()) && (m.getIsRead() == null || !m.getIsRead()))
+                    // ДОБАВЛЕНО: m.getSender() != null && ...
+                    .filter(m -> m.getSender() != null && !m.getSender().getId().equals(currentUser.getId()) && (m.getIsRead() == null || !m.getIsRead()))
                     .map(Message::getId)
                     .findFirst()
                     .orElse(null);
@@ -490,36 +503,9 @@ public class ChatController {
     }
 
     @PostMapping("/chats/{id}/delete")
-    @ResponseBody // Важно: используем ResponseBody, чтобы не было редиректа
-    public ResponseEntity<?> deleteChat(@PathVariable Long id) {
-        try {
-            if (id != null) {
-                Chat chat = chatService.getChatById(id);
-                if (chat != null) {
-                    // Собираем ID участников, чтобы уведомить их
-                    List<Long> memberIds = chat.getMembers().stream()
-                            .map(m -> m.getUser().getId())
-                            .collect(Collectors.toList());
-
-                    // Удаляем чат
-                    chatService.deleteChat(id);
-
-                    // Отправляем уведомление всем участникам
-                    Map<String, Object> resp = new HashMap<>();
-                    resp.put("type", "CHAT_DELETED");
-                    resp.put("chatId", id);
-
-                    for (Long userId : memberIds) {
-                        messagingTemplate.convertAndSend("/topic/user/" + userId + "/queue/new-chat", resp);
-                    }
-                    return ResponseEntity.ok("Deleted");
-                }
-            }
-            return ResponseEntity.notFound().build();
-        } catch (Exception e) {
-            log.warn("Ошибка при удалении чата: {}", id);
-            return ResponseEntity.internalServerError().build();
-        }
+    public String deleteChat(@PathVariable Long id) {
+        try { if (id != null) chatService.deleteChat(id); } catch (Exception e) { log.warn("Chat already gone: {}", id); }
+        return "redirect:/chats";
     }
 
     @Transactional
@@ -585,14 +571,183 @@ public class ChatController {
         boolean wasUnread = (msg != null && !msg.getIsRead());
         messageService.deleteMessage(dto.getMessageId());
         Chat chat = chatService.getChatById(dto.getChatId());
+
         Map<String, Object> resp = new HashMap<>();
-        resp.put("type", "DELETE"); resp.put("messageId", dto.getMessageId()); resp.put("chatId", dto.getChatId()); resp.put("wasUnread", wasUnread);
+        resp.put("type", "DELETE");
+        resp.put("messageId", dto.getMessageId());
+        resp.put("chatId", dto.getChatId());
+        resp.put("wasUnread", wasUnread);
+
         messageRepository.findFirstByChatOrderByCreatedAtDesc(chat).ifPresentOrElse(last -> {
-            resp.put("newLastContent", last.getContent()); resp.put("newLastTime", last.getCreatedAt().toString());
-            resp.put("lastSenderId", last.getSender().getId()); resp.put("lastIsRead", last.getIsRead());
+            resp.put("newLastContent", last.getContent());
+            resp.put("newLastTime", last.getCreatedAt().toString());
+
+            // БЕЗОПАСНАЯ ПРОВЕРКА: Если это системное сообщение (sender == null), передаем null
+            resp.put("lastSenderId", last.getSender() != null ? last.getSender().getId() : null);
+
+            // Заодно защищаем isRead на случай, если у системного сообщения статус не проставлен
+            resp.put("lastIsRead", last.getIsRead() != null ? last.getIsRead() : true);
         }, () -> resp.put("newLastContent", null));
+
         if (chat != null) chat.getMembers().forEach(m -> messagingTemplate.convertAndSend("/topic/user/" + m.getUser().getId() + "/queue/messages", resp));
         messagingTemplate.convertAndSend("/topic/chat/" + dto.getChatId(), resp);
+    }
+    @PostMapping("/api/chats/{chatId}/leave")
+    @ResponseBody
+    public ResponseEntity<?> leaveGroupChat(@PathVariable Long chatId, Authentication auth) {
+        try {
+            MyUser currentUser = myUserService.findByEmail(auth.getName()).orElse(null);
+            if (currentUser == null) return ResponseEntity.status(401).build();
+
+            // 1. ИСПРАВЛЕНИЕ ИМЕНИ: Берем только первое слово (имя без фамилии)
+            String displayedName = "Пользователь";
+            ru.denis.aestymes.dtos.UserDTO userDto = myUserService.convertToDTO(currentUser);
+            if (userDto != null && userDto.getName() != null && !userDto.getName().isBlank()) {
+                // Разбиваем строку по пробелам и берем первый элемент
+                displayedName = userDto.getName().trim().split("\\s+")[0];
+            } else if (currentUser.getUsername() != null && !currentUser.getUsername().isBlank()) {
+                displayedName = currentUser.getUsername().trim().split("\\s+")[0];
+            }
+
+            // --- НОВЫЙ БЛОК: СОХРАНЕНИЕ УВЕДОМЛЕНИЯ О ВЫХОДЕ В БАЗУ ДАННЫХ ---
+            Chat currentChat = chatService.getChatById(chatId);
+            if (currentChat != null) {
+                Message systemMsg = new Message();
+                systemMsg.setChat(currentChat);
+
+                // 2. ИСПРАВЛЕНИЕ БУЛАВКИ: Ставим отправителя в null!
+                // Это даст понять HTML-шаблону, что это системное сообщение (без булавки и аватарки)
+                systemMsg.setSender(null);
+
+                systemMsg.setContent(displayedName + " покинул(а) группу");
+                systemMsg.setCreatedAt(java.time.LocalDateTime.now());
+
+                // Если в модели Message (Message.java) есть поле isSystemMessage, обязательно раскомментируй:
+                // systemMsg.setIsSystemMessage(true);
+
+                messageRepository.save(systemMsg);
+            }
+
+            // 1. Отправляем данные в WebSocket для тех, кто прямо сейчас онлайн в чате
+            Map<String, Object> resp = new HashMap<>();
+            resp.put("type", "USER_LEFT");
+            resp.put("chatId", chatId);
+            resp.put("userId", currentUser.getId());
+            resp.put("userName", displayedName);
+
+            // Отправляем строго в топик активного чата
+            messagingTemplate.convertAndSend("/topic/chat/" + chatId, resp);
+
+            // 2. И ТОЛЬКО ПОСЛЕ ЭТОГО удаляем связь (пользователя из чата) из базы данных
+            chatService.leaveGroupChat(chatId, currentUser.getId());
+
+            return ResponseEntity.ok(Map.of("status", "success", "message", "Вы покинули группу"));
+        } catch (Exception e) {
+            log.error("Ошибка при выходе из группы: ", e);
+            return ResponseEntity.internalServerError().body(e.getMessage());
+        }
+    }
+    // Класс-обертка для входящего JSON (можно разместить прямо внутри метода или как внутренний класс)
+    public static class AddMembersDto {
+        private List<Long> userIds;
+        public List<Long> getUserIds() { return userIds; }
+        public void setUserIds(List<Long> userIds) { this.userIds = userIds; }
+    }
+
+    @PostMapping("/api/chats/{chatId}/add-members")
+    @ResponseBody
+    @Transactional
+    public ResponseEntity<?> addMembersToGroup(@PathVariable Long chatId, @RequestBody AddMembersDto payload, Authentication auth) {
+        try {
+            MyUser currentUser = myUserService.findByEmail(auth.getName()).orElse(null);
+            if (currentUser == null) return ResponseEntity.status(401).build();
+
+            if (payload.getUserIds() == null || payload.getUserIds().isEmpty()) {
+                return ResponseEntity.badRequest().body("Не выбраны пользователи для добавления");
+            }
+
+            // 1. Добавляем в БД
+            List<MyUser> addedUsers = chatService.addMembersToGroup(chatId, payload.getUserIds());
+
+            if (addedUsers.isEmpty()) {
+                return ResponseEntity.ok(Map.of("status", "success", "message", "Пользователи уже состоят в группе"));
+            }
+
+            // 2. Формируем имя того, кто добавил
+            String actorName = currentUser.getName() != null ? currentUser.getName().trim().split("\\s+")[0] : currentUser.getUsername();
+
+            Chat chat = chatService.getChatById(chatId);
+
+            // 3. Для каждого добавленного юзера создаем системное сообщение и рассылаем сокет
+            for (MyUser addedUser : addedUsers) {
+                String addedName = addedUser.getName() != null ? addedUser.getName().trim().split("\\s+")[0] : addedUser.getUsername();
+                String noticeText = actorName + " добавил(а) " + addedName;
+
+                // Сохраняем в историю как системное сообщение (sender = null)
+                Message systemMsg = new Message();
+                systemMsg.setChat(chat);
+                systemMsg.setSender(null);
+                systemMsg.setContent(noticeText);
+                systemMsg.setCreatedAt(java.time.LocalDateTime.now());
+                messageRepository.save(systemMsg);
+
+                // Отправляем в WebSocket
+                Map<String, Object> resp = new HashMap<>();
+                resp.put("type", "USER_ADDED");
+                resp.put("chatId", chatId);
+                resp.put("content", noticeText);
+
+                // В текущий чат (для тех, кто онлайн)
+                messagingTemplate.convertAndSend("/topic/chat/" + chatId, resp);
+
+                // Оповещаем самого добавленного пользователя, чтобы у него группа появилась в меню слева!
+                messagingTemplate.convertAndSend("/topic/user/" + addedUser.getId() + "/queue/new-chat", "REFRESH");
+            }
+
+            return ResponseEntity.ok(Map.of("status", "success"));
+        } catch (Exception e) {
+            log.error("Ошибка при добавлении в группу: ", e);
+            return ResponseEntity.internalServerError().body(e.getMessage());
+        }
+    }
+    // ЧТО ДОБАВИТЬ в ChatController.java
+    @PostMapping("/api/chats/{chatId}/update")
+    @ResponseBody
+    public ResponseEntity<?> updateGroupSettings(@PathVariable Long chatId,
+                                                 @RequestParam("name") String name,
+                                                 @RequestParam(value = "avatar", required = false) org.springframework.web.multipart.MultipartFile avatar,
+                                                 Authentication auth) {
+        try {
+            MyUser currentUser = myUserService.findByEmail(auth.getName()).orElse(null);
+            if (currentUser == null) return ResponseEntity.status(401).build();
+
+            // 1. Вызываем сервис для сохранения изменений в БД
+            chatService.updateGroupSettings(chatId, name, avatar);
+
+            // 2. Отправляем системное уведомление в чат о переименовании (необязательно, но круто для мессенджера!)
+            String actorName = currentUser.getName() != null ? currentUser.getName().trim().split("\\s+")[0] : currentUser.getUsername();
+            String noticeText = actorName + " изменил(а) настройки группы";
+
+            Chat chat = chatService.getChatById(chatId);
+            Message systemMsg = new Message();
+            systemMsg.setChat(chat);
+            systemMsg.setSender(null);
+            systemMsg.setContent(noticeText);
+            systemMsg.setCreatedAt(java.time.LocalDateTime.now());
+            messageRepository.save(systemMsg);
+
+            // Публикуем событие в WebSocket, чтобы у всех перерендерился чат
+            Map<String, Object> resp = new HashMap<>();
+            resp.put("type", "SYSTEM_NOTICE");
+            resp.put("chatId", chatId);
+            resp.put("content", noticeText);
+            messagingTemplate.convertAndSend("/topic/chat/" + chatId, resp);
+
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            log.error("Ошибка при обновлении группы: ", e);
+            return ResponseEntity.internalServerError().body(e.getMessage());
+        }
     }
 
     @MessageMapping("/send/chat/delete")
